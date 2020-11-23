@@ -1,0 +1,7 @@
+.clangd
+build/*
+bin/*
+shaders/spv/*
+tags
+tanto
+compile_commands.json
