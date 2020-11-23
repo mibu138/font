@@ -2,12 +2,12 @@ CC = gcc
 GLC = glslc
 
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
-LDFLAGS = -L/opt/hfs18.0/dsolib -L/home/michaelb/lib
-INFLAGS = -I/opt/hfs18.0/toolkit/include/HAPI -I/home/michaelb/dev -I/usr/include/freetype2
-LIBS = -lm -ltanto -lvulkan -lxcb -lxcb-keysyms -lHAPIL -lfreetype
+LDFLAGS = -L/opt/hfs18.0/dsolib -L$(HOME)/lib
+INFLAGS = -I$(HOME)/dev -I/usr/include/freetype2
+LIBS = -lm -ltanto -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
 BIN = bin
-LIB = /home/michaelb/lib
+LIB = $(HOME)/lib
 LIBNAME = font
 
 O = build

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <tanto/r_render.h>
+#include <tanto/t_text.h>
 #include <tanto/v_video.h>
 #include <tanto/t_def.h>
 #include <tanto/t_utils.h>
@@ -14,10 +15,12 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/r_renderpass.h>
 #include <tanto/v_command.h>
+#include <vulkan/vulkan_core.h>
 
 #define SPVDIR "./shaders/spv"
 
 static Tanto_V_Image renderTargetDepth;
+static Tanto_V_Image attachmentText;
 
 static VkRenderPass  renderpass;
 static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
@@ -45,6 +48,8 @@ static void initAttachments(void)
         VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
+
+    attachmentText = tanto_CreateTextImage(300, 40, "Beckys butt");
 }
 
 static void initRenderPass(void)
@@ -139,11 +144,15 @@ static void initDescriptorSetsAndPipelineLayouts(void)
 {
     const Tanto_R_DescriptorSet descriptorSets[] = {{
         .id = R_DESC_SET_MAIN,
-        .bindingCount = 1,
+        .bindingCount = 2,
         .bindings = {{
             .descriptorCount = 1,
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+        },{
+            .descriptorCount = 1,
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
         }}
     }};
 
@@ -162,14 +171,12 @@ static void initDescriptorSetsAndPipelineLayouts(void)
 static void initPipelines(void)
 {
     const Tanto_R_PipelineInfo pipeInfo = {
-        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
             .renderPass = renderpass, 
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
-            .vertShader = SPVDIR"/template-vert.spv",
-            .fragShader = SPVDIR"/template-frag.spv"
+            .fragShader = SPVDIR"/text-frag.spv"
         }
     };
 
@@ -197,6 +204,12 @@ static void updateStaticDescriptors(void)
         .range  = uniformBufferRegion.size
     };
 
+    VkDescriptorImageInfo imageInfo = {
+        .imageView = attachmentText.view,
+        .imageLayout = attachmentText.layout,
+        .sampler = attachmentText.sampler
+    };
+
     VkWriteDescriptorSet writes[] = {{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstArrayElement = 0,
@@ -205,6 +218,14 @@ static void updateStaticDescriptors(void)
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &uboInfo
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = descriptorSets[R_DESC_SET_MAIN],
+        .dstBinding = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &imageInfo
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
@@ -227,22 +248,7 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    const VkBuffer vertBuffers[2] = {
-        triangle.vertexRegion.buffer,
-        triangle.vertexRegion.buffer
-    };
-
-    const VkDeviceSize attrOffsets[2] = {
-        triangle.attrOffsets[0] + triangle.vertexRegion.offset,
-        triangle.attrOffsets[1] + triangle.vertexRegion.offset,
-    };
-
-    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffers, attrOffsets);
-
-    vkCmdBindIndexBuffer(*cmdBuf, triangle.indexRegion.buffer, 
-            triangle.indexRegion.offset, TANTO_VERT_INDEX_TYPE);
-
-    vkCmdDrawIndexed(*cmdBuf, triangle.indexCount, 1, 0, 0, 0);
+    vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
 }
@@ -309,5 +315,6 @@ void r_CleanUp(void)
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
     }
     tanto_v_DestroyImage(renderTargetDepth);
+    tanto_v_DestroyImage(attachmentText);
     vkDestroyPipeline(device, mainPipeline, NULL);
 }

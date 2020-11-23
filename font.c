@@ -20,7 +20,7 @@
 
 void font_Init(void)
 {
-    tanto_v_config.rayTraceEnabled = true;
+    tanto_v_config.rayTraceEnabled = false;
 #ifndef NDEBUG
     tanto_v_config.validationEnabled = true;
 #else

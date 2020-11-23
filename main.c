@@ -24,9 +24,9 @@ draw_bitmap( FT_Bitmap*  bitmap,
   FT_Int  x_max = x + bitmap->width;
   FT_Int  y_max = y + bitmap->rows;
 
-
   /* for simplicity, we assume that `bitmap->pixel_mode' */
   /* is `FT_PIXEL_MODE_GRAY' (i.e., not a bitmap font)   */
+  uint8_t* buffer = *image;
 
   for ( i = x, p = 0; i < x_max; i++, p++ )
   {
@@ -36,7 +36,7 @@ draw_bitmap( FT_Bitmap*  bitmap,
            i >= WIDTH || j >= HEIGHT )
         continue;
 
-      image[j][i] |= bitmap->buffer[q * bitmap->width + p];
+      buffer[j * WIDTH + i] |= bitmap->buffer[q * bitmap->width + p];
     }
   }
 }
@@ -76,14 +76,14 @@ void drawString(const char* string)
     }
 }
 
-int main(int argc, char *argv[])
+void runFTDemo(void)
 {
     matrix.xx = (FT_Fixed)1 * 0x10000L;
     matrix.xy = (FT_Fixed)0 * 0x10000L;
     matrix.yx = (FT_Fixed)0 * 0x10000L;
     matrix.yy = (FT_Fixed)1 * 0x10000L;
 
-    int error = FT_Init_FreeType(&library);
+    error = FT_Init_FreeType(&library);
     assert(!error);
 
     error = FT_New_Face(library, "/usr/share/fonts/truetype/freefont/FreeMono.ttf", 0, &face);
@@ -94,5 +94,11 @@ int main(int argc, char *argv[])
 
     drawString("Beckys butt!!");
     show_image();
+}
+
+int main(int argc, char *argv[])
+{
+    font_Init();
+    font_StartLoop();
     return 0;
 }
