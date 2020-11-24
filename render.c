@@ -48,7 +48,7 @@ static void initAttachments(void)
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
 
-    attachmentText = tanto_CreateTextImage(1000, 1000, 300, 500, 140, "Fuck.");
+    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 300, 500, 140, "Fuck.");
 }
 
 static void initRenderPass(void)
