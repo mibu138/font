@@ -15,7 +15,6 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/r_renderpass.h>
 #include <tanto/v_command.h>
-#include <vulkan/vulkan_core.h>
 
 #define SPVDIR "./shaders/spv"
 
@@ -49,7 +48,7 @@ static void initAttachments(void)
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
 
-    attachmentText = tanto_CreateTextImage(300, 40, "Beckys butt");
+    attachmentText = tanto_CreateTextImage(1000, 1000, 300, 500, 140, "Fuck.");
 }
 
 static void initRenderPass(void)
