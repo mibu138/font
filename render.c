@@ -18,8 +18,8 @@
 
 #define SPVDIR "./shaders/spv"
 
-static Tanto_V_Image renderTargetDepth;
 static Tanto_V_Image attachmentText;
+static Tanto_V_Image attachmentDepth;
 
 static VkRenderPass  renderpass;
 static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
@@ -40,22 +40,22 @@ typedef enum {
 // TODO: we should implement a way to specify the offscreen renderpass format at initialization
 static void initAttachments(void)
 {
-    renderTargetDepth = tanto_v_CreateImage(
+    attachmentDepth = tanto_v_CreateImage(
         TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT,
-        depthFormat,
+        tanto_r_GetDepthFormat(),
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_SAMPLED_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
 
-    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 300, 500, 140, "Fuck.");
+    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 300, 500, 140, "Sneaky butthole :~D");
 }
 
 static void initRenderPass(void)
 {
     const VkAttachmentDescription attachmentColor = {
         .flags = 0,
-        .format = swapFormat,
+        .format = tanto_r_GetSwapFormat(),
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -67,7 +67,7 @@ static void initRenderPass(void)
 
     const VkAttachmentDescription attachmentDepth = {
         .flags = 0,
-        .format = depthFormat,
+        .format = tanto_r_GetDepthFormat(),
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -120,7 +120,7 @@ static void initFramebuffers(void)
     {
         Tanto_R_Frame* frame = tanto_r_GetFrame(i);
         const VkImageView attachments[] = {
-            frame->swapImage.view, renderTargetDepth.view
+            frame->swapImage.view, attachmentDepth.view
         };
 
         const VkFramebufferCreateInfo fbi = {
@@ -203,6 +203,21 @@ static void updateStaticDescriptors(void)
         .range  = uniformBufferRegion.size
     };
 
+    VkWriteDescriptorSet writes[] = {{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = descriptorSets[R_DESC_SET_MAIN],
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &uboInfo
+    }};
+
+    vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
+}
+
+static void updateDynamicDescriptors(void)
+{
     VkDescriptorImageInfo imageInfo = {
         .imageView = attachmentText.view,
         .imageLayout = attachmentText.layout,
@@ -213,14 +228,6 @@ static void updateStaticDescriptors(void)
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstArrayElement = 0,
         .dstSet = descriptorSets[R_DESC_SET_MAIN],
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &uboInfo
-    },{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstArrayElement = 0,
-        .dstSet = descriptorSets[R_DESC_SET_MAIN],
         .dstBinding = 1,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -228,10 +235,6 @@ static void updateStaticDescriptors(void)
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
-}
-
-static void updateDynamicDescriptors(void)
-{
 }
 
 static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
@@ -260,6 +263,7 @@ void r_InitRenderer()
     initDescriptorSetsAndPipelineLayouts();
     initPipelines();
     updateStaticDescriptors();
+    updateDynamicDescriptors();
 
     triangle = tanto_r_CreateTriangle();
 }
@@ -293,13 +297,14 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
 void r_RecreateSwapchain(void)
 {
     vkDeviceWaitIdle(device);
-
     r_CleanUp();
+    printf("CLEANUP CALLED!\n");
 
     tanto_r_RecreateSwapchain();
     initAttachments();
     initPipelines();
     initFramebuffers();
+    updateDynamicDescriptors();
 
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
@@ -313,7 +318,7 @@ void r_CleanUp(void)
     {
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
     }
-    tanto_v_DestroyImage(renderTargetDepth);
-    tanto_v_DestroyImage(attachmentText);
+    tanto_v_FreeImage(&attachmentDepth);
+    tanto_v_FreeImage(&attachmentText);
     vkDestroyPipeline(device, mainPipeline, NULL);
 }

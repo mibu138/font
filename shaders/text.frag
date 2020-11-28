@@ -10,5 +10,5 @@ void main()
 {
     uint val = texture(image, inUv).r;
     float c = float(val) / 255.0;
-    outColor = vec4(c, c, c, 1);
+    outColor = vec4(0.6, 0.3, 0.1, c);
 }
