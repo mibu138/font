@@ -33,10 +33,13 @@ debug: all
 release: CFLAGS += -DNDEBUG -O3
 release: all
 
-all: bin lib tags shaders
+all: tanto bin lib tags shaders
 
 FRAGS := $(patsubst %.frag,$(SPV)/%-frag.spv,$(notdir $(wildcard $(GLSL)/*.frag)))
 VERTS := $(patsubst %.vert,$(SPV)/%-vert.spv,$(notdir $(wildcard $(GLSL)/*.vert)))
+
+tanto:
+	cd tanto ; make ; cd ..
 
 shaders: $(FRAGS) $(VERTS)
 

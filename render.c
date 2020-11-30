@@ -1,5 +1,6 @@
 #include "render.h"
 #include "tanto/m_math.h"
+#include "tanto/r_geo.h"
 #include "tanto/v_image.h"
 #include "tanto/v_memory.h"
 #include <memory.h>
@@ -15,19 +16,28 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/r_renderpass.h>
 #include <tanto/v_command.h>
+#include <vulkan/vulkan_core.h>
+#include <stdlib.h>
 
 #define SPVDIR "./shaders/spv"
+#define MAX_QUADS 8
 
 static Tanto_V_Image attachmentText;
 static Tanto_V_Image attachmentDepth;
 
 static VkRenderPass  renderpass;
 static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
+
 static VkPipeline    mainPipeline;
+static VkPipeline    cardPipeline;
 
 static Tanto_V_BufferRegion uniformBufferRegion;
 
-static Tanto_R_Primitive triangle;
+static struct {
+    uint8_t quadCount;
+    Tanto_R_Primitive quad[MAX_QUADS];
+    Tanto_R_VertexDescription vertDescription;
+} cards;
 
 typedef enum {
     R_PIPE_LAYOUT_MAIN,
@@ -48,7 +58,20 @@ static void initAttachments(void)
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
 
-    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 300, 500, 140, "Sneaky butthole :~D");
+    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 10, 500, 240, "Butt.");
+}
+
+static void initCards(void)
+{
+    cards.quadCount = 10;
+    for (int i = 0; i < cards.quadCount; i++) 
+    {
+        float x = ((float)random() / (float)RAND_MAX);
+        float y = ((float)random() / (float)RAND_MAX);
+        x = 2 * x - 1;
+        y = 2 * y - 1;
+        cards.quad[i] = tanto_r_CreateQuadNDC(x, y, 0.8, 0.8, &cards.vertDescription);
+    }
 }
 
 static void initRenderPass(void)
@@ -179,7 +202,20 @@ static void initPipelines(void)
         }
     };
 
+    const Tanto_R_PipelineInfo cardPipeInfo = {
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .layoutId = R_PIPE_LAYOUT_MAIN,
+        .payload.rasterInfo = {
+            .renderPass = renderpass, 
+            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+            .vertexDescription = cards.vertDescription,
+            .vertShader = SPVDIR"/card-vert.spv",
+            .fragShader = SPVDIR"/card-frag.spv"
+        }
+    };
+
     tanto_r_CreatePipeline(&pipeInfo, &mainPipeline);
+    tanto_r_CreatePipeline(&cardPipeInfo, &cardPipeline);
 }
 
 // descriptors that do only need to have update called once and can be updated on initialization
@@ -252,6 +288,30 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
     vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
 
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, cardPipeline);
+
+    for (int i = 0; i < 8; i++) 
+    {
+        Tanto_R_Primitive prim = cards.quad[i];
+
+        const VkBuffer vertBuffers[2] = {
+            prim.vertexRegion.buffer,
+            prim.vertexRegion.buffer
+        };
+
+        const VkDeviceSize attrOffsets[2] = {
+            prim.attrOffsets[0] + prim.vertexRegion.offset,
+            prim.attrOffsets[1] + prim.vertexRegion.offset,
+        };
+
+        vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffers, attrOffsets);
+
+        vkCmdBindIndexBuffer(*cmdBuf, prim.indexRegion.buffer, 
+                prim.indexRegion.offset, TANTO_VERT_INDEX_TYPE);
+
+        vkCmdDrawIndexed(*cmdBuf, prim.indexCount, 1, 0, 0, 0);
+    }
+
     vkCmdEndRenderPass(*cmdBuf);
 }
 
@@ -261,11 +321,10 @@ void r_InitRenderer()
     initRenderPass();
     initFramebuffers();
     initDescriptorSetsAndPipelineLayouts();
+    initCards();
     initPipelines();
     updateStaticDescriptors();
     updateDynamicDescriptors();
-
-    triangle = tanto_r_CreateTriangle();
 }
 
 void r_UpdateRenderCommands(const int8_t frameIndex)
