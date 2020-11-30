@@ -20,7 +20,10 @@
 #include <stdlib.h>
 
 #define SPVDIR "./shaders/spv"
-#define MAX_QUADS 8
+#define MAX_QUADS 10000000 
+#define MESSAGE "OX"
+
+#define RND() ((float)random() / (float)RAND_MAX)
 
 static Tanto_V_Image attachmentText;
 static Tanto_V_Image attachmentDepth;
@@ -33,11 +36,20 @@ static VkPipeline    cardPipeline;
 
 static Tanto_V_BufferRegion uniformBufferRegion;
 
+typedef struct{
+    Vec4 color;
+} PushConstant;
+
+typedef struct {
+    Tanto_R_Primitive quad;
+    PushConstant      pushConst;
+} Card;
+
 static struct {
-    uint8_t quadCount;
-    Tanto_R_Primitive quad[MAX_QUADS];
+    uint32_t cardCount;
+    Card     card[MAX_QUADS];
     Tanto_R_VertexDescription vertDescription;
-} cards;
+} deck;
 
 typedef enum {
     R_PIPE_LAYOUT_MAIN,
@@ -58,19 +70,28 @@ static void initAttachments(void)
         VK_IMAGE_ASPECT_DEPTH_BIT,
         VK_SAMPLE_COUNT_1_BIT);
 
-    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 10, 500, 240, "Butt.");
+    attachmentText = tanto_CreateTextImage(TANTO_WINDOW_WIDTH, 
+            TANTO_WINDOW_WIDTH, 10, 900, 800, MESSAGE);
 }
 
 static void initCards(void)
 {
-    cards.quadCount = 10;
-    for (int i = 0; i < cards.quadCount; i++) 
+    deck.cardCount = 500;
+    assert(deck.cardCount < MAX_QUADS);
+    for (int i = 0; i < deck.cardCount; i++) 
     {
-        float x = ((float)random() / (float)RAND_MAX);
-        float y = ((float)random() / (float)RAND_MAX);
-        x = 2 * x - 1;
-        y = 2 * y - 1;
-        cards.quad[i] = tanto_r_CreateQuadNDC(x, y, 0.8, 0.8, &cards.vertDescription);
+        float x = RND();
+        float y = RND();
+        float s = RND();
+        s = 0.02 + s;
+        x = 2.5 * x - 1.45;
+        y = 2.5 * y - 1.45;
+        if (i == 0)
+            deck.card[i].quad = tanto_r_CreateQuadNDC(x, y, s, s, &deck.vertDescription);
+        else 
+            deck.card[i].quad = tanto_r_CreateQuadNDC(x, y, s, s, NULL);
+        Vec4 color = (Vec4){RND() * .7, RND() * 0.2, RND() * 0.2, 1};
+        deck.card[i].pushConst.color = color;
     }
 }
 
@@ -178,12 +199,18 @@ static void initDescriptorSetsAndPipelineLayouts(void)
         }}
     }};
 
+    const VkPushConstantRange pushConstant = {
+        .offset = 0,
+        .size   = sizeof(PushConstant),
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+    };
+
     const Tanto_R_PipelineLayout pipelayouts[] = {{
         .id = R_PIPE_LAYOUT_MAIN, 
         .descriptorSetCount = 1, 
         .descriptorSetIds = {R_DESC_SET_MAIN},
-        .pushConstantCount = 0,
-        .pushConstantsRanges = {}
+        .pushConstantCount = 1,
+        .pushConstantsRanges = pushConstant
     }};
 
     tanto_r_InitDescriptorSets(descriptorSets, TANTO_ARRAY_SIZE(descriptorSets));
@@ -208,7 +235,7 @@ static void initPipelines(void)
         .payload.rasterInfo = {
             .renderPass = renderpass, 
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .vertexDescription = cards.vertDescription,
+            .vertexDescription = deck.vertDescription,
             .vertShader = SPVDIR"/card-vert.spv",
             .fragShader = SPVDIR"/card-frag.spv"
         }
@@ -290,9 +317,9 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
     vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, cardPipeline);
 
-    for (int i = 0; i < 8; i++) 
+    for (int i = 0; i < deck.cardCount; i++) 
     {
-        Tanto_R_Primitive prim = cards.quad[i];
+        Tanto_R_Primitive prim = deck.card[i].quad;
 
         const VkBuffer vertBuffers[2] = {
             prim.vertexRegion.buffer,
@@ -303,6 +330,9 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
             prim.attrOffsets[0] + prim.vertexRegion.offset,
             prim.attrOffsets[1] + prim.vertexRegion.offset,
         };
+
+        vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_MAIN], 
+                VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), &deck.card[i].pushConst);
 
         vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffers, attrOffsets);
 
@@ -321,10 +351,10 @@ void r_InitRenderer()
     initRenderPass();
     initFramebuffers();
     initDescriptorSetsAndPipelineLayouts();
-    initCards();
-    initPipelines();
     updateStaticDescriptors();
     updateDynamicDescriptors();
+    initCards();
+    initPipelines();
 }
 
 void r_UpdateRenderCommands(const int8_t frameIndex)
@@ -334,7 +364,7 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     VkCommandBufferBeginInfo cbbi = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     V_ASSERT( vkBeginCommandBuffer(frame->commandBuffer, &cbbi) );
 
-    VkClearValue clearValueColor = {0.002f, 0.023f, 0.009f, 1.0f};
+    VkClearValue clearValueColor = {0.000f, 0.000f, 0.000f, 1.0f};
     VkClearValue clearValueDepth = {1.0, 0};
 
     VkClearValue clears[] = {clearValueColor, clearValueDepth};
