@@ -220,11 +220,13 @@ static void initDescriptorSetsAndPipelineLayouts(void)
 static void initPipelines(void)
 {
     const Tanto_R_PipelineInfo pipeInfo = {
-        .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
             .renderPass = renderpass, 
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+            .frontFace   = VK_FRONT_FACE_CLOCKWISE,
+            .vertShader = tanto_r_FullscreenTriVertShader(),
             .fragShader = SPVDIR"/text-frag.spv"
         }
     };
@@ -236,6 +238,7 @@ static void initPipelines(void)
             .renderPass = renderpass, 
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .vertexDescription = deck.vertDescription,
+            .blendMode  = TANTO_R_BLEND_MODE_OVER,
             .vertShader = SPVDIR"/card-vert.spv",
             .fragShader = SPVDIR"/card-frag.spv"
         }
